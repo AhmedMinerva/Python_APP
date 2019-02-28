@@ -1,0 +1,157 @@
+import tkinter as tk
+from tkinter import filedialog
+import openpyxl as xl
+import win32com.client       # Need pywin32 from pip
+from PIL import ImageGrab    # Need PIL as well
+import os
+import zipfile
+
+excel = win32com.client.Dispatch("Excel.Application")
+
+#Creating the app using tk.T
+
+class Application(tk.Tk):
+    
+    def __init__(self):
+        tk.Tk.__init__(self)
+        buttonn = tk.Button(self, text = "browse", command = self.im)
+        buttonn.pack()
+        self.wi = tk.Entry(self, width = 18)
+        self.wi.pack()
+        
+        button = tk.Button(self, text = "Ok", command = self.clean)
+        button.pack()
+        
+        self.x = 0
+    def im(self):
+        self.x = 1
+        Application.filename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("Excel files", "*.xlsx *.xlsm" ),("all files","*.*")))
+    
+    
+  #Exract Images from the comapny's excel sheets
+  
+    def Extract(self):
+        
+        XLSname1 = Application.filename
+
+        XLSname2 = "Storage.xlsm"
+
+        path_forImage = "IPM_Images"
+
+        EmbeddedFiles = zipfile.ZipFile(XLSname1).namelist()
+
+        ImageFiles1 = [F for F in EmbeddedFiles if F.count('.jpg') or F.count('.jpeg') ]
+
+
+        for Image in ImageFiles1:
+            zipfile.ZipFile(XLSname1).extract(Image)
+
+
+        #--
+
+        EmbeddedFiles2 = zipfile.ZipFile(XLSname2).namelist()
+
+        ImageFiles2 = [F for F in EmbeddedFiles2 if F.count('.jpg') or F.count('.jpeg') ]
+        ss = "Singab"
+        l = 1
+        for Image in ImageFiles1[0:50]:
+            ss = str(self.ImName[l])  + '.jpg' 
+            zipfile.ZipFile(XLSname2, 'a').write(Image, arcname = ss)
+            l += 1
+
+
+
+        for Image in ImageFiles2:
+            zipfile.ZipFile(XLSname2).extract(Image, path = path_forImage)
+    
+
+#Choosing the specific data that we want from the excelsheets in order to store them in the SQL Database
+
+    def clean(self):
+        self.ImName = []
+
+        
+
+
+        path1 = Application.filename
+        path2 = 'BOM_Collection.xlsx'
+        path3 = 'Process_Collection.xlsx'
+
+
+        wb1 = xl.load_workbook(filename=path1)
+        
+        for i in range(len(wb1.worksheets)):
+            
+            count = 2
+            title = wb1.worksheets[i].title
+            if title[0:3] == "BOM":
+                ws1 = wb1.worksheets[i]
+                wb2 = xl.load_workbook(filename=path2)
+                ws2 = wb2.active
+                #ws2 = wb2['BOM Verification(1.9)']
+                workbook = excel.Workbooks.Open(path1)
+                sheet = workbook.Worksheets(title)
+                for column in ws1.columns:
+                    RowList = []
+                   
+                    xx = column[3:18]
+                    for cell in xx:
+                        
+                        RowList.append(cell.value)
+                        if "13" in str(cell.coordinate) and cell.value != None:
+                            shape = sheet.Shapes(count)
+                            string = cell.coordinate[0]
+                            string2 = string + "4"
+                            NName = ws1[string2].value
+                            Image_Name = str(title) + "" + str(NName)
+                            RowList.append(Image_Name)
+                            self.ImName.append(Image_Name)
+                            
+                            
+                                
+                            
+                    if RowList[0] != "Check Item":
+                        if RowList[0] != None:
+                            self.I_D = self.wi.get()
+                            RowList.insert(0, title)
+                            RowList.insert(0, self.I_D)
+                        ws2.append(RowList)
+                        count += 1
+                    
+                wb2.save(path2)
+
+
+            elif title[0:4] == "Proc":
+                 
+                 Pws1= wb1.worksheets[i]
+                 Pwb2= xl.load_workbook(filename=path3)
+                 Pws2= Pwb2.active
+                 for row in Pws1['B6':'K127']:
+                     RowList =[]
+                     RowList.append(self.I_D)
+                     RowList.append(title)
+                     for ccc in row:
+                         RowList.append(ccc.value)
+                     Pws2.append(RowList)
+                 Pwb2.save(path3)
+
+
+
+
+
+
+
+        self.Extract()
+        
+        
+    
+
+
+
+
+
+
+
+if __name__ == "__main__":
+    app = Application()
+    app.mainloop()        
