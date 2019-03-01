@@ -1,0 +1,88 @@
+def second_stage(df, age, gender, brand):
+    """
+    Recommends a list of cars that satisfies the specified age and preferred brand.
+    If brand is a nationality ('Korea', 'Japan', or 'Germany'), add weights to the 
+    corresponding car of the associated country. If brand is 'Luxury', add weights 
+    to each car according to its price.
+
+    Inputs:
+    - df: data frame, data to filter
+    - age: string, age in approximation (e.g.,'30' for 30s)
+    - gender: stirng, either 'M' or 'F'
+    - brand: string, either 'Korea', 'Japan', 'Germany', or 'Luxury'
+
+    Outputs:
+    - filtered: dataframe, containing objects satisfying the conditions
+    """
+    filtered = None
+#     ranks = []
+    scores = []
+    for index, row in df.iterrows():
+        score = 0
+        if row['Model'] in table[(int(age),gender)]:
+            score += table[(int(age),gender)][row['Model']]
+        if brand != 'Luxury':
+            if row['Country'] == brand:
+                score += 1
+        else:
+            score += row['luxury_weight']
+        scores.append(score)
+#         ranks.append(score)
+    df = df.assign(scores=pd.Series(scores).values)
+    filtered = df.nlargest(int(1/2*len(df.index)), 'scores', 'first')
+    return filtered
+
+
+# Test
+fil2 = second_stage(df, '20', 'M', 'Japan')
+fil2
+
+---------------------------------------------------------------------------------------------
+#The third stage of the filtration method using K means
+
+from kmodes.kmodes.kprototypes import KPrototypes
+
+# kmodes library: https://github.com/nicodv/kmodes
+
+def third_stage(df, wage, car_type, small_car, hybrid):
+    """
+    Recommends a list of cars based on specified car_type, small_car, budget1,
+    budget2, using kmodes algorithm. If car_type is normal, small_car will be
+    considered as a replacement. Overall, the net effect of car_type and small_car
+    is one of the followings: 'MIDDLE', 'COMPACT', 'BIG', 'SUV/VR', 'SPORT', 'SMALL'
+
+    Inputs:
+    - df: data frame, to filter
+    - wage: string, either '15', '15-30', '30-60', or '60'
+    - car_type: string, either 'NORMAL', 'SUV/VR', or 'SPORT'
+    - small_car: string, either 'SMALL/COMPACT', 'MIDDLE', or 'BIG'
+    - hybrid: string, 'X' or 'O'
+    """
+    # According to Weiting's suggestion
+    if wage == '15':
+        budget = 1500/2
+    elif wage == '15-30':
+        budget = (4000+1500)/2
+    elif wage == '30-60':
+        budget = (4000+7000)/2
+    else:
+        budget = (16931+7000)/2
+        
+    X_train = df[['Price','Car type', 'EV/Hybrid available' ]].values 
+    kproto = KPrototypes(n_clusters=5, init='Huang', verbose=0)
+    clusters = kproto.fit(X_train, categorical=[1,2]).labels_
+    if car_type != 'NORMAL':
+        net_car_type = car_type
+    else:
+        net_car_type = small_car
+    X_test = np.array([[budget, net_car_type, hybrid]])
+    X_df =  pd.DataFrame(X_test)
+    X_df[[0]]=X_df[[0]].astype('float')
+    X_test = X_df.values
+    labels = kproto.predict(X_test, categorical=[1,2])
+    fil_mask = df.assign(cluster=clusters)
+    fil_mask = fil_mask[fil_mask.cluster==labels[0]].drop(axis=1, columns='cluster')
+    return fil_mask.nlargest(3, 'scores', 'first') # just specify the number of recommendations here
+# Test
+fil3 = third_stage(fil2, '30-60', 'SUV/RV', 'MIDDLE', 'O')
+fil3
